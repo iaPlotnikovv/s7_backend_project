@@ -1,0 +1,260 @@
+openapi: 3.0.0
+info:
+  title: flight-passengers-analysis
+  version: 1.0.0
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    UserOut:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    TokenOut:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: bearer
+
+    PassengerFlights:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        flights:
+          type: array
+          items:
+            type: object
+
+    AnalysisPoint:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        cluster:
+          type: integer
+        serialized_text:
+          type: string
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+
+paths:
+
+  # ------------------------------------------------------------------
+  # auth-service :8001
+  # ------------------------------------------------------------------
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Регистрация пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '400':
+          description: Email уже занят / некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Вход — возвращает JWT токен
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenOut'
+        '401':
+          description: Неверный email или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Данные текущего пользователя
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '401':
+          description: Токен отсутствует или невалиден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ------------------------------------------------------------------
+  # passenger-service :8002
+  # ------------------------------------------------------------------
+
+  /passengers/flights:
+    get:
+      tags: [passengers]
+      summary: Все пассажиры с их рейсами
+      description: Возвращает массив всех пассажиров с рейсами одним запросом.
+      responses:
+        '200':
+          description: Массив пассажиров с рейсами
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PassengerFlights'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ------------------------------------------------------------------
+  # analysis-service :8003
+  # ------------------------------------------------------------------
+
+  /analysis:
+    post:
+      tags: [analysis]
+      summary: Запуск ML пайплайна
+      description: >
+        Получает всех пассажиров из passenger-service,
+        сериализует в текст, строит эмбеддинги (Sentence Transformers),
+        кластеризует (KMeans), вычисляет UMAP координаты,
+        сохраняет всё в БД (INSERT/UPDATE по profile_id) и возвращает результаты.
+      responses:
+        '200':
+          description: Результаты анализа
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisPoint'
+        '502':
+          description: Ошибка при обращении к passenger-service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /analysis/results:
+    get:
+      tags: [analysis]
+      summary: Получить сохранённые результаты анализа
+      description: >
+        Читает результаты из таблицы results.
+        Если таблица пустая — возвращает пустой массив со статусом 200.
+        Не запускает ML пайплайн.
+      responses:
+        '200':
+          description: Сохранённые результаты (пустой массив если данных нет)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisPoint'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
