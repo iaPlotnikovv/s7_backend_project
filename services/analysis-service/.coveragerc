@@ -1,0 +1,11 @@
+[run]
+source = app
+omit =
+    app/__init__.py
+
+[report]
+exclude_lines =
+    # ML pipeline — excluded
+    def run_ml_pipeline
+    # Lifespan cannot be tested via ASGITransport
+    async def lifespan
