@@ -7,18 +7,18 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-    ports: 
+    ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - backend
-    
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
       timeout: 2s
       retries: 3
+
   auth-service:
     build:
       context: ./services/auth-service
@@ -36,7 +36,57 @@ services:
         condition: service_healthy
     networks:
       - backend
+
+  passenger-service:
+    build:
+      context: ./services/passenger-service
+      dockerfile: Dockerfile
+    container_name: passenger_container
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  analysis-service:
+    build:
+      context: ./services/analysis-service
+      dockerfile: Dockerfile
+    container_name: analysis_container
+    restart: unless-stopped
+    ports:
+      - "${ANALYSIS_PORT}:8003"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      passenger-service:
+        condition: service_started
+    networks:
+      - backend
+
+  frontend:
+    image: python:3.11-slim
+    container_name: frontend_container
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    command: python -m http.server 8080
+    networks:
+      - backend
+
 volumes:
   postgres_data:
+
 networks:
   backend:
