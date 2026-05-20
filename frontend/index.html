@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S7 — Passenger Analysis</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <style>
+    :root {
+      --green:      #6EC800;
+      --green-dark: #57a000;
+      --green-glow: #6EC80033;
+
+      --bg:         #0d0d0d;
+      --surface:    #161616;
+      --elevated:   #1f1f1f;
+      --hover:      #252525;
+
+      --border:     #2a2a2a;
+      --border-hi:  #3a3a3a;
+
+      --text:       #f0f0f0;
+      --text-2:     #8a8a8a;
+      --text-3:     #555;
+
+      --red:        #ff4d4d;
+      --red-dim:    #ff4d4d18;
+      --red-border: #5c1a1a;
+      --ok:         #4ade80;
+    }
+
+    [hidden] { display: none !important; }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ──────────────────────────────────────────────── */
+
+    header {
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 2rem;
+      gap: 0.75rem;
+    }
+
+    .logo-badge {
+      width: 30px; height: 30px;
+      background: var(--green);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 0.8rem; color: #000;
+      flex-shrink: 0;
+    }
+
+    .logo-name  { font-size: 0.9rem; font-weight: 600; }
+    .logo-sep   { width: 1px; height: 16px; background: var(--border-hi); margin: 0 0.25rem; }
+    .logo-sub   { font-size: 0.78rem; color: var(--text-2); }
+
+    /* ── Auth ────────────────────────────────────────────────── */
+
+    #auth-section {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 56px);
+      padding: 2rem 1rem;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .auth-card h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+
+    .field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.9rem; }
+
+    .field label {
+      font-size: 0.72rem;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="number"] {
+      background: var(--bg);
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      padding: 0.6rem 0.75rem;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px var(--green-glow);
+    }
+
+    .msg {
+      font-size: 0.82rem;
+      min-height: 1em;
+      margin-bottom: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .msg-error   { color: var(--red); }
+    .msg-success { color: var(--ok); }
+
+    .auth-toggle {
+      margin-top: 1rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-3);
+    }
+
+    .auth-toggle a {
+      color: var(--green);
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .auth-toggle a:hover { text-decoration: underline; }
+
+    /* ── Buttons ─────────────────────────────────────────────── */
+
+    .btn {
+      display: inline-flex;
+      align-items: center; justify-content: center;
+      gap: 0.4rem;
+      border: none; border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem; font-weight: 600;
+      padding: 0.6rem 1.2rem;
+      transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-green {
+      background: var(--green); color: #000;
+    }
+    .btn-green:hover:not(:disabled) {
+      background: var(--green-dark);
+      box-shadow: 0 0 14px var(--green-glow);
+    }
+
+    .btn-ghost {
+      background: var(--elevated);
+      color: var(--text-2);
+      border: 1px solid var(--border-hi);
+    }
+    .btn-ghost:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--red-border);
+    }
+    .btn-danger:hover:not(:disabled) { background: var(--red-dim); }
+
+    .btn-full { width: 100%; padding: 0.65rem; }
+
+    /* ── App layout ──────────────────────────────────────────── */
+
+    #app-section { padding: 1.75rem 2rem 3rem; }
+
+    /* action cards */
+    .action-bar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+      flex-wrap: wrap;
+    }
+
+    .action-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-width: 200px;
+      flex: 1;
+    }
+
+    .action-card-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-2);
+    }
+
+    .action-card-desc {
+      font-size: 0.8rem;
+      color: var(--text-3);
+      line-height: 1.4;
+      margin-bottom: 0.5rem;
+    }
+
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.65rem;
+    }
+
+    .params-grid .field { margin-bottom: 0; }
+
+    .logout-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 1.75rem;
+      margin-top: -0.5rem;
+    }
+
+    /* ── Progress bar ────────────────────────────────────────── */
+
+    #progress { margin-bottom: 1.5rem; }
+
+    .progress-label { font-size: 0.8rem; color: var(--text-2); margin-bottom: 0.4rem; }
+
+    .progress-track {
+      height: 3px; background: var(--elevated);
+      border-radius: 99px; overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--green);
+      border-radius: 99px;
+      animation: slide 1.5s ease-in-out infinite;
+    }
+
+    @keyframes slide {
+      0%   { margin-left: -40%; width: 40%; }
+      60%  { margin-left: 100%; width: 40%; }
+      100% { margin-left: 100%; width: 40%; }
+    }
+
+    /* ── Table ───────────────────────────────────────────────── */
+
+    .section-title {
+      font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-3); margin-bottom: 0.65rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 2rem;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+
+    thead th {
+      background: var(--surface);
+      color: var(--text-3);
+      font-weight: 600; font-size: 0.68rem;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      padding: 0.4rem 0.65rem;
+      text-align: left; white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr { border-top: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--hover); }
+    tbody td { padding: 0.35rem 0.65rem; vertical-align: top; color: #c8c8c8; }
+
+    td.mono {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 0.72rem; color: var(--text-2); white-space: nowrap;
+    }
+
+    td.center { text-align: center; }
+    td.text-cell { max-width: 360px; line-height: 1.45; }
+
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.04em; color: #000;
+    }
+
+    /* ── Chart ───────────────────────────────────────────────── */
+
+    .chart-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1rem 0.75rem;
+      margin-bottom: 2rem;
+    }
+
+    #scatter-chart { max-height: 460px; }
+
+    .chart-hint {
+      font-size: 0.72rem; color: var(--text-3);
+      text-align: center; margin-top: 0.5rem;
+    }
+
+    /* ── Empty state ─────────────────────────────────────────── */
+
+    .empty-state {
+      text-align: center;
+      padding: 3.5rem 1rem;
+      color: var(--text-3); font-size: 0.88rem; line-height: 1.7;
+    }
+
+    .empty-state strong { color: var(--green); }
+
+    /* ── Status badge ────────────────────────────────────────── */
+
+    .status-line {
+      font-size: 0.78rem; color: var(--text-3);
+      margin-bottom: 1.25rem;
+    }
+
+    .status-line span { color: var(--green); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-badge">S7</div>
+  <span class="logo-name">Airlines</span>
+  <div class="logo-sep"></div>
+  <span class="logo-sub">Passenger Analysis</span>
+</header>
+
+<!-- ═══ AUTH ═══ -->
+
+<section id="auth-section">
+  <div class="auth-card">
+    <h2 id="auth-title">Sign in</h2>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="analyst@s7.ru" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label for="password">Password <span style="color:var(--text-3);text-transform:none;font-weight:400;">(min 8 characters)</span></label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <p id="auth-msg" class="msg" hidden></p>
+
+    <button class="btn btn-green btn-full" id="auth-btn">Log in</button>
+
+    <p class="auth-toggle">
+      <span id="toggle-hint">Don't have an account?</span>
+      <a id="toggle-link">Sign up</a>
+    </p>
+  </div>
+</section>
+
+<!-- ═══ APP ═══ -->
+
+<section id="app-section" hidden>
+
+  <!-- Action cards -->
+  <div class="action-bar">
+
+    <div class="action-card" style="flex: 2; min-width: 320px;">
+      <div class="action-card-title">Parameters</div>
+      <div class="params-grid">
+        <div class="field">
+          <label for="p-passengers">Passengers</label>
+          <input type="number" id="p-passengers" value="50" min="5" max="1000000" />
+        </div>
+        <div class="field">
+          <label for="p-clusters">K-means clusters</label>
+          <input type="number" id="p-clusters" value="5" min="2" max="50" />
+        </div>
+        <div class="field">
+          <label for="p-neighbors">UMAP neighbors</label>
+          <input type="number" id="p-neighbors" value="15" min="2" max="100" />
+        </div>
+      </div>
+    </div>
+
+    <div class="action-card">
+      <div class="action-card-title">Run Analysis</div>
+      <div class="action-card-desc">Reseed passengers and run the full ML pipeline with the chosen parameters.</div>
+      <button class="btn btn-green" id="analyse-btn">Run Analysis</button>
+    </div>
+
+    <div class="action-card">
+      <div class="action-card-title">Refresh Results</div>
+      <div class="action-card-desc">Reload previously computed results from the database without re-running the pipeline.</div>
+      <button class="btn btn-ghost" id="refresh-btn">Refresh Results</button>
+    </div>
+
+  </div>
+
+  <div class="logout-wrap">
+    <button class="btn btn-danger" id="logout-btn">Log out</button>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress" hidden>
+    <p class="progress-label">Running ML pipeline — fetching passengers, embedding, clustering...</p>
+    <div class="progress-track"><div class="progress-bar"></div></div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-area">
+    <div class="empty-state" id="empty-state">
+      No results yet.<br>Press <strong>Run Analysis</strong> to start the ML pipeline.
+    </div>
+
+    <div id="status-line" class="status-line" hidden></div>
+
+    <div id="chart-section" hidden>
+      <p class="section-title">UMAP Projection</p>
+      <div class="chart-wrap">
+        <canvas id="scatter-chart"></canvas>
+        <p class="chart-hint">Scroll to zoom &middot; Drag to pan &middot; Double-click to reset</p>
+      </div>
+    </div>
+
+    <div id="table-section" hidden>
+      <p class="section-title">Passengers</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Profile ID</th>
+              <th>Cluster</th>
+              <th>Serialized text</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────
+
+  const AUTH_BASE     = 'http://localhost:8001';
+  const ANALYSIS_BASE = 'http://localhost:8003';
+  const TOKEN_KEY     = 'jwt_token';
+
+  const CLUSTER_COLORS = [
+    '#6EC800','#00BFFF','#FFB800',
+    '#FF6B35','#B24BF3','#00D4AA','#FF4D7D',
+  ];
+
+  // ── Token ───────────────────────────────────────────────────
+
+  const getToken   = ()  => localStorage.getItem(TOKEN_KEY);
+  const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
+  const clearToken = ()  => localStorage.removeItem(TOKEN_KEY);
+
+  // ── Auth mode ────────────────────────────────────────────────
+
+  let mode = 'login'; // 'login' | 'register'
+
+  function setMode(m) {
+    mode = m;
+    hideMsg();
+    if (m === 'login') {
+      document.getElementById('auth-title').textContent      = 'Sign in';
+      document.getElementById('auth-btn').textContent        = 'Log in';
+      document.getElementById('toggle-hint').textContent     = "Don't have an account?";
+      document.getElementById('toggle-link').textContent     = 'Sign up';
+      document.getElementById('password').autocomplete       = 'current-password';
+    } else {
+      document.getElementById('auth-title').textContent      = 'Create account';
+      document.getElementById('auth-btn').textContent        = 'Sign up';
+      document.getElementById('toggle-hint').textContent     = 'Already have an account?';
+      document.getElementById('toggle-link').textContent     = 'Sign in';
+      document.getElementById('password').autocomplete       = 'new-password';
+    }
+  }
+
+  document.getElementById('toggle-link').addEventListener('click', () => setMode(mode === 'login' ? 'register' : 'login'));
+
+  // ── Messages ─────────────────────────────────────────────────
+
+  function showMsg(text, type) { // type: 'error' | 'success'
+    const el = document.getElementById('auth-msg');
+    el.textContent  = text;
+    el.className    = 'msg msg-' + type;
+    el.hidden       = false;
+  }
+
+  function hideMsg() {
+    const el = document.getElementById('auth-msg');
+    el.hidden = true; el.textContent = '';
+  }
+
+  // ── Section switch ───────────────────────────────────────────
+
+  function showAuth() {
+    document.getElementById('auth-section').hidden = false;
+    document.getElementById('app-section').hidden  = true;
+  }
+
+  function showApp() {
+    document.getElementById('auth-section').hidden = true;
+    document.getElementById('app-section').hidden  = false;
+  }
+
+  // ── Validation ───────────────────────────────────────────────
+
+  // RFC 5322 simplified — принимает любой TLD, включая .ru
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  function validate(email, password) {
+    if (!email)            { showMsg('Email is required.', 'error'); return false; }
+    if (!emailRe.test(email)) { showMsg('Please enter a valid email address.', 'error'); return false; }
+    if (!password)         { showMsg('Password is required.', 'error'); return false; }
+    if (mode === 'register' && password.length < 8) {
+      showMsg('Password must be at least 8 characters.', 'error'); return false;
+    }
+    return true;
+  }
+
+  // ── API: login ───────────────────────────────────────────────
+
+  async function doLogin(email, password) {
+    const body = new URLSearchParams();
+    body.append('username', email);
+    body.append('password', password);
+
+    const res = await fetch(AUTH_BASE + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    if (res.status === 401 || res.status === 400) {
+      showMsg('Invalid email or password.', 'error'); return false;
+    }
+    if (!res.ok) {
+      showMsg('Login failed (' + res.status + '). Try again.', 'error'); return false;
+    }
+
+    const data = await res.json();
+    setToken(data.access_token);
+    showApp();
+    loadResults();
+    return true;
+  }
+
+  // ── API: register ────────────────────────────────────────────
+
+  async function doRegister(email, password) {
+    const res = await fetch(AUTH_BASE + '/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (res.status === 422) {
+      const body = await res.json().catch(() => ({}));
+      const errs = Array.isArray(body.detail) ? body.detail : [];
+      const msg  = errs.length ? errs[0].msg : 'Validation error.';
+      showMsg(msg, 'error'); return false;
+    }
+    if (res.status === 400) {
+      const body = await res.json().catch(() => ({}));
+      const d    = (body.detail || '').toLowerCase();
+      showMsg(d.includes('registered') || d.includes('exist') || d.includes('already')
+        ? 'This email is already registered. Please sign in.'
+        : 'Registration failed. Try again.', 'error');
+      return false;
+    }
+    if (!res.ok) {
+      showMsg('Server error (' + res.status + '). Try again.', 'error'); return false;
+    }
+
+    return true;
+  }
+
+  // ── Auth submit ──────────────────────────────────────────────
+
+  document.getElementById('auth-btn').addEventListener('click', async () => {
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    hideMsg();
+    if (!validate(email, password)) return;
+
+    const btn = document.getElementById('auth-btn');
+    btn.disabled    = true;
+    btn.textContent = mode === 'login' ? 'Signing in...' : 'Creating account...';
+
+    try {
+      if (mode === 'login') {
+        await doLogin(email, password);
+      } else {
+        const ok = await doRegister(email, password);
+        if (ok) {
+          showMsg('Account created! Signing you in...', 'success');
+          const loggedIn = await doLogin(email, password);
+          if (!loggedIn) showMsg('Registered! Please sign in manually.', 'success');
+        }
+      }
+    } catch (err) {
+      showMsg('Cannot reach auth-service. Is Docker running?', 'error');
+      console.error(err);
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = mode === 'login' ? 'Log in' : 'Sign up';
+    }
+  });
+
+  // Enter submits
+  ['email', 'password'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('auth-btn').click();
+    })
+  );
+
+  // ── Analysis API ─────────────────────────────────────────────
+
+  async function apiFetch(method, path, body = null) {
+    const headers = { 'Authorization': 'Bearer ' + getToken() };
+    const opts = { method, headers };
+    if (body !== null) {
+      headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(ANALYSIS_BASE + path, opts);
+    if (res.status === 401) { clearToken(); showAuth(); const e = new Error('401'); e.code = 401; throw e; }
+    if (!res.ok) throw new Error(method + ' ' + path + ' → ' + res.status);
+    return res.json();
+  }
+
+  async function loadResults() {
+    setBusy('refresh-btn', true, 'Loading...');
+    try {
+      const data = await apiFetch('GET', '/analysis/results');
+      renderResults(data);
+    } catch (e) {
+      if (e.code !== 401) console.error(e);
+    } finally {
+      setBusy('refresh-btn', false, 'Refresh Results');
+    }
+  }
+
+  // ── Analyse & Refresh buttons ────────────────────────────────
+
+  document.getElementById('analyse-btn').addEventListener('click', async () => {
+    const params = {
+      n_passengers: parseInt(document.getElementById('p-passengers').value, 10) || 50,
+      n_clusters:   parseInt(document.getElementById('p-clusters').value,   10) || 5,
+      n_neighbors:  parseInt(document.getElementById('p-neighbors').value,  10) || 15,
+    };
+    setBusy('analyse-btn', true, 'Running...');
+    document.getElementById('progress').hidden = false;
+    try {
+      const data = await apiFetch('POST', '/analysis', params);
+      renderResults(data);
+    } catch (e) {
+      if (e.code !== 401) alert('Analysis failed: ' + e.message);
+    } finally {
+      setBusy('analyse-btn', false, 'Run Analysis');
+      document.getElementById('progress').hidden = true;
+    }
+  });
+
+  document.getElementById('refresh-btn').addEventListener('click', loadResults);
+
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    clearToken();
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    document.getElementById('results-body').innerHTML = '';
+    document.getElementById('table-section').hidden   = true;
+    document.getElementById('chart-section').hidden   = true;
+    document.getElementById('status-line').hidden     = true;
+    document.getElementById('empty-state').hidden     = false;
+    document.getElementById('email').value            = '';
+    document.getElementById('password').value         = '';
+    setMode('login');
+    showAuth();
+  });
+
+  function setBusy(id, busy, label) {
+    const b = document.getElementById(id);
+    b.disabled    = busy;
+    b.textContent = label;
+  }
+
+  // ── Render ───────────────────────────────────────────────────
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderResults(results) {
+    const empty  = document.getElementById('empty-state');
+    const tbl    = document.getElementById('table-section');
+    const chart  = document.getElementById('chart-section');
+    const status = document.getElementById('status-line');
+    const tbody  = document.getElementById('results-body');
+
+    if (!results || results.length === 0) {
+      empty.hidden = false; tbl.hidden = true; chart.hidden = true; status.hidden = true;
+      return;
+    }
+
+    empty.hidden  = true;
+    tbl.hidden    = false;
+    chart.hidden  = false;
+    status.hidden = false;
+
+    const clusters = [...new Set(results.map(r => r.cluster))].length;
+    status.innerHTML = 'Showing <span>' + results.length + ' passengers</span> in <span>' + clusters + ' clusters</span>';
+
+    tbody.innerHTML = '';
+    results.forEach(r => {
+      const color = CLUSTER_COLORS[r.cluster % CLUSTER_COLORS.length];
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="mono">' + escapeHtml(r.profile_id) + '</td>' +
+        '<td class="center"><span class="badge" style="background:' + color + '">' + r.cluster + '</span></td>' +
+        '<td class="text-cell">' + escapeHtml(r.serialized_text) + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    drawChart(results);
+  }
+
+  // ── Chart ────────────────────────────────────────────────────
+
+  let chartInstance = null;
+
+  function drawChart(results) {
+    const canvas = document.getElementById('scatter-chart');
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    const groups = {};
+    results.forEach(r => {
+      if (!groups[r.cluster]) groups[r.cluster] = [];
+      groups[r.cluster].push({ x: r.x, y: r.y, pid: r.profile_id, txt: r.serialized_text });
+    });
+
+    const datasets = Object.entries(groups)
+      .sort(([a],[b]) => +a - +b)
+      .map(([i, pts]) => ({
+        label: 'Cluster ' + i,
+        data: pts,
+        backgroundColor: CLUSTER_COLORS[+i % CLUSTER_COLORS.length] + 'bb',
+        borderColor:     CLUSTER_COLORS[+i % CLUSTER_COLORS.length],
+        borderWidth: 1, pointRadius: 6, pointHoverRadius: 9,
+      }));
+
+    chartInstance = new Chart(canvas, {
+      type: 'scatter',
+      data: { datasets },
+      options: {
+        responsive: true,
+        animation: { duration: 400 },
+        plugins: {
+          legend: { position: 'top', labels: { color: '#8a8a8a', boxWidth: 10, padding: 16 } },
+          tooltip: {
+            backgroundColor: '#1f1f1f', borderColor: '#2a2a2a', borderWidth: 1,
+            titleColor: '#f0f0f0', bodyColor: '#8a8a8a', padding: 10,
+            callbacks: {
+              title: items => 'Profile: ' + items[0].raw.pid.slice(0,8) + '...',
+              label: item  => {
+                const t = item.raw.txt;
+                return t.length > 72 ? t.slice(0,72) + '...' : t;
+              },
+            },
+          },
+          zoom: {
+            zoom: { wheel: { enabled: true, speed: 0.08 }, pinch: { enabled: true }, mode: 'xy' },
+            pan:  { enabled: true, mode: 'xy' },
+          },
+        },
+        scales: {
+          x: { title: { display: true, text: 'UMAP 1', color: '#555' }, grid: { color: '#1a1a1a' }, ticks: { color: '#555' } },
+          y: { title: { display: true, text: 'UMAP 2', color: '#555' }, grid: { color: '#1a1a1a' }, ticks: { color: '#555' } },
+        },
+      },
+    });
+
+    canvas.addEventListener('dblclick', () => chartInstance && chartInstance.resetZoom());
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+
+  (function init() {
+    if (getToken()) { showApp(); loadResults(); }
+    else            { showAuth(); }
+  })();
+</script>
+</body>
+</html>
